@@ -37,6 +37,13 @@ describe 'types', ->
         data.should.eql '"{""a"":1}"\n'  unless err
         next err
 
+    it 'should pass through buffers', (next) ->
+      stringify [
+        {value: Buffer('foobar')}
+      ], (err, data) ->
+        data.should.eql 'foobar\n' unless err
+        next err
+
   describe 'custom formatters', ->
 
     it 'should let overwrite date formatter', (next) ->

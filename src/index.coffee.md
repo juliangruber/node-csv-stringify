@@ -7,6 +7,7 @@ information.
     stream = require 'stream'
     util = require 'util'
     get = require 'lodash.get'
+    replace = require 'buffer-replace'
 
 ## Usage
 
@@ -158,6 +159,7 @@ Convert a line to a string. Line may be an object, an array or a string.
       columns = Object.keys columns if typeof columns is 'object' and columns isnt null and not Array.isArray columns
       delimiter = @options.delimiter
       quote = @options.quote
+      quoteBuf = Buffer(quote)
       escape = @options.escape
       unless Array.isArray line
         _line = []
@@ -176,39 +178,37 @@ Convert a line to a string. Line may be an object, an array or a string.
         # this case, we respect the columns indexes
         line.splice columns.length
       if Array.isArray line
-        newLine = ''
+        newLine = Buffer(0)
         for i in [0...line.length]
           field = line[i]
           if typeof field is 'string'
-            # fine 99% of the cases, keep going
+            field = Buffer(field)
           else if typeof field is 'number'
             # Cast number to string
-            field = '' + field
+            field = Buffer(String(field))
           else if typeof field is 'boolean'
-            field = @options.formatters.bool(field)
+            field = Buffer(@options.formatters.bool(field))
           else if field instanceof Date
-            field = @options.formatters.date(field)
-          else if typeof field is 'object' and field isnt null
-            field = @options.formatters.object(field)
-          if field
+            field = Buffer(@options.formatters.date(field))
+          else if typeof field is 'object' and field isnt null and not Buffer.isBuffer(field)
+            field = Buffer(@options.formatters.object(field))
+          if field?.length
             containsdelimiter = field.indexOf(delimiter) >= 0
-            containsQuote = field.indexOf(quote) >= 0
+            containsQuote = field.indexOf(quoteBuf) >= 0
             containsEscape = field.indexOf(escape) >= 0 and (escape isnt quote)
             containsLinebreak = field.indexOf('\r') >= 0 or field.indexOf('\n') >= 0
             shouldQuote = containsQuote or containsdelimiter or containsLinebreak or @options.quoted or (@options.quotedString and typeof line[i] is 'string')
             if shouldQuote and containsEscape
-              regexp = if escape is '\\' then new RegExp(escape + escape, 'g') else new RegExp(escape, 'g');
-              field = field.replace(regexp, escape + escape)
+              field = replace(field, escape, escape + escape)
             if containsQuote
-              regexp = new RegExp(quote,'g')
-              field = field.replace(regexp, escape + quote)
+              field = replace(field, quote, escape + quote)
             if shouldQuote
-              field = quote + field + quote
-            newLine += field
+              field = Buffer.concat([quoteBuf, field, quoteBuf])
+            newLine = Buffer.concat([newLine, field])
           else if @options.quotedEmpty or (not @options.quotedEmpty? and line[i] is '' and @options.quotedString)
-            newLine += quote + quote
+            newLine = Buffer.concat([newLine, Buffer.concat([quoteBuf, quoteBuf])])
           if i isnt line.length - 1
-            newLine += delimiter
+            newLine = Buffer.concat([newLine, Buffer(delimiter)])
         line = newLine
       line
 
